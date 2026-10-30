@@ -301,12 +301,13 @@ async function handleWrite(c: Ctx) {
     }
     const id = nextId(w);
     w.approvals.push({ id, turnId: turn.id, customerId: cust.id, proposal: finalProposal, outcome, status: 'pending' });
-    turn.status = 'pending';
     await step(w, turn, { phase: 'approval', title: 'Paused: waiting for the seller (human in the loop)', level: 'warn',
       detail: `Reasons: ${outcome.reasons.map(r => REASON_LABEL[r] ?? r).join('; ')}. See the Approvals tab on the right.`,
       why: 'Nothing executes while paused. In the real build this is a LangGraph interrupt() resumed with the same thread id.' });
     await appendLog(w, 'approval', `ESCALATE ${describe(finalProposal)} [${outcome.reasons.join(', ')}]`, { approval: id });
     await say(c, 'pending', {}, 'warn');
+    turn.status = 'pending'; // set last, so the stamp and the Approve button appear together
+    bump(w);
     return;
   }
   // ALLOW
