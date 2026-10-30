@@ -1,0 +1,43 @@
+{
+  "name": "kavach",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pre-action verification for tool-using support agents: every refund, return or address change is checked against the records before it executes.",
+  "license": "MIT",
+  "keywords": [
+    "ai-agents",
+    "agent-guardrails",
+    "human-in-the-loop",
+    "verification",
+    "customer-support",
+    "typescript",
+    "react"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Abhishek222983101/kavach.git"
+  },
+  "homepage": "https://github.com/Abhishek222983101/kavach#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
