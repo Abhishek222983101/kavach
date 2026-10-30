@@ -22,6 +22,7 @@ const sleep = (ms: number) => (ms > 0 ? new Promise(r => setTimeout(r, ms)) : Pr
 
 export interface SendOpts {
   photo?: boolean;
+  gloss?: string; // English translation of the customer's message (shown in the chat)
   override?: Partial<Pick<Settings, 'mode' | 'guard' | 'courierDown'>>;
 }
 interface Ctx {
@@ -34,14 +35,16 @@ async function step(w: World, turn: Turn, s: Omit<Step, 'id'>) {
   bump(w);
   await sleep(w.settings.speed);
 }
-function chat(w: World, cust: string, role: 'customer' | 'agent' | 'system', text: string) {
-  w.chats[cust].push({ id: nextId(w), role, text });
+function chat(w: World, cust: string, role: 'customer' | 'agent' | 'system', text: string, gloss?: string) {
+  w.chats[cust].push({ id: nextId(w), role, text, gloss });
   bump(w);
 }
 async function say(c: Ctx, key: string, vars: Record<string, string | number> = {}, level: Level = 'info') {
   const text = t(c.lang, key, vars);
-  chat(c.w, c.cust.id, 'agent', text);
+  const en = t('en', key, vars);
+  chat(c.w, c.cust.id, 'agent', text, c.lang === 'hinglish' ? en : undefined);
   c.turn.reply = text;
+  c.turn.replyEn = en;
   await step(c.w, c.turn, { phase: 'reply', title: 'Reply to customer', detail: text, level,
     why: 'The reply is built only from tool results and verdict reasons, never from free-form model text.' });
 }
@@ -79,7 +82,7 @@ async function run(w: World, turn: Turn, text: string, opts: SendOpts) {
   const cust = w.customers.find(c => c.id === turn.customerId)!;
   const p = parseMessage(text);
   const c: Ctx = { w, turn, cust, p, lang: p.lang };
-  chat(w, cust.id, 'customer', text);
+  chat(w, cust.id, 'customer', text, opts.gloss);
   await appendLog(w, 'ingest', `message from ${cust.name} (${cust.phone})`, { customer: cust.id, intent: p.intent });
 
   await step(w, turn, { phase: 'ingest', title: 'Message received over WhatsApp (simulated)', detail: `${cust.name} · ${cust.phone}`, level: 'info',
@@ -98,12 +101,13 @@ async function run(w: World, turn: Turn, text: string, opts: SendOpts) {
 
   if ((opts.photo || p.photoMentioned) && p.orderId) w.photos.add(p.orderId);
 
-  if (p.intent === 'unknown') { await say(c, 'unknown'); return; }
+  if (p.intent === 'unknown') { turn.note = 'asked'; await say(c, 'unknown'); return; }
   if (p.intent === 'wismo') { await handleWismo(c); return; }
   await handleWrite(c);
 }
 
 async function askOrder(c: Ctx) {
+  c.turn.note = 'asked';
   const r = listOrders(c.w, 'agent', c.cust.id);
   await step(c.w, c.turn, { phase: 'read', title: `GET /customers/${c.cust.id}/orders → ${r.status}`, detail: `${r.body.length} orders`, level: 'ok',
     why: 'Missing information: the agent asks instead of guessing.' });
@@ -132,6 +136,7 @@ async function readShipment(c: Ctx, awb: string): Promise<'down' | ShipmentView 
 }
 
 async function courierFailed(c: Ctx, what: string) {
+  c.turn.note = 'ticket';
   const summary = `Customer ${c.cust.name} asked about order ${c.order?.id}. Courier API failed 3 times, so I could not confirm the shipment. Please follow up. (${what})`;
   c.w.tickets.push({ id: nextId(c.w), turnId: c.turn.id, summary, status: 'open' });
   await step(c.w, c.turn, { phase: 'approval', title: 'escalate_to_human(summary) → ticket created', detail: summary, level: 'warn',
@@ -148,6 +153,7 @@ async function handleWismo(c: Ctx) {
   const o = await readOrder(c, p.orderId);
   if (!o) return;
   if (o.customer_id !== c.cust.id) {
+    c.turn.note = 'self_stop'; c.turn.noteText = "It isn't this customer's order, so no details were shared.";
     await step(c.w, c.turn, { phase: 'reply', title: 'Ownership check: not the caller’s order, no details shared', level: 'warn' });
     await say(c, 'not_yours', {}, 'warn');
     return;
@@ -156,6 +162,7 @@ async function handleWismo(c: Ctx) {
     const s = await readShipment(c, o.awb);
     if (s === 'down') return courierFailed(c, 'WISMO');
   }
+  c.turn.note = 'read';
   if (o.status === 'delivered') await say(c, 'wismo_delivered', { id: o.id, item: o.item, days: o.status === 'delivered' ? (c.ship?.delivered_days_ago ?? 0) : 0 }, 'ok');
   else if (o.status === 'shipped') await say(c, 'wismo_shipped', { id: o.id, item: o.item }, 'ok');
   else await say(c, 'wismo_placed', { id: o.id, item: o.item }, 'ok');
@@ -178,6 +185,7 @@ async function handleWrite(c: Ctx) {
   if (!order) return;
 
   if (mode === 'careful' && order.customer_id !== cust.id) {
+    turn.note = 'self_stop'; turn.noteText = "The order isn't this customer's.";
     await step(w, turn, { phase: 'plan', title: 'Self-check: order belongs to someone else, stopping', level: 'warn' });
     await appendLog(w, 'verify', `agent self-check refused: order ${order.id} not caller's`, { order: order.id });
     await say(c, 'not_yours', {}, 'warn');
@@ -215,9 +223,9 @@ async function handleWrite(c: Ctx) {
   }
 
   // missing information (both modes)
-  if (tool === 'update_address' && !p.newAddress) { await say(c, 'ask_address'); return; }
+  if (tool === 'update_address' && !p.newAddress) { turn.note = 'asked'; await say(c, 'ask_address'); return; }
   if (tool === 'issue_refund' && amountFromInjection == null && (p.reason === 'damaged' || p.reason === 'wrong_item') && !w.photos.has(order.id)) {
-    await say(c, 'ask_photo'); return;
+    turn.note = 'asked'; await say(c, 'ask_photo'); return;
   }
 
   const left = order.paid - order.refunded;
@@ -233,6 +241,7 @@ async function handleWrite(c: Ctx) {
       else if (tool === 'issue_refund' && left <= 0) refuse = { key: 'r_duplicate', why: 'already fully refunded' };
     } else if (order.status !== 'placed' && order.status !== 'packed') refuse = { key: 'r_state', why: `order is already ${order.status}` };
     if (refuse) {
+      turn.note = 'self_stop'; turn.noteText = refuse.why;
       await step(w, turn, { phase: 'plan', title: 'Self-check failed: the agent stops without proposing', level: 'warn', detail: refuse.why,
         why: 'A careful agent catches obvious problems itself. Switch to Gullible mode to see the Verifier catch them instead.' });
       await appendLog(w, 'verify', `agent self-check refused ${tool}: ${refuse.why}`, { order: order.id });

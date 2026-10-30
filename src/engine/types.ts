@@ -97,8 +97,12 @@ export interface Turn {
   executed: boolean;
   unguarded: boolean;
   status: 'running' | 'pending' | 'done';
+  replyEn?: string;
+  /** why no proposal was made: the agent asked a question, stopped itself, handed over to a human, or only read */
+  note?: 'asked' | 'self_stop' | 'ticket' | 'read';
+  noteText?: string;
 }
-export interface ChatMsg { id: number; role: 'customer' | 'agent' | 'system'; text: string }
+export interface ChatMsg { id: number; role: 'customer' | 'agent' | 'system'; text: string; gloss?: string }
 export interface Approval {
   id: number;
   turnId: number;
