@@ -33,7 +33,7 @@ export function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (
     <label className="toggle" title={hint}>
       <input type="checkbox" checked={on} onChange={e => onChange(e.target.checked)} />
       <span className="track"><span className="thumb" /></span>
-      <span className="toggle-label">{label}</span>
+      <span>{label}</span>
     </label>
   );
 }

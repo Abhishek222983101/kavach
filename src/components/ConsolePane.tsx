@@ -4,7 +4,7 @@ import { runExecutorLab } from '../engine/lab';
 import type { LabResult } from '../engine/lab';
 import { tamperRow, verifyChain } from '../engine/log';
 import { resetWorld, bump, inr } from '../engine/world';
-import { REASON_LABEL } from '../engine/i18n';
+import { PLAIN } from '../content/plain';
 import { short } from '../engine/crypto';
 import { Badge, Seg, Toggle, useWorld, verdictKind } from './ui';
 import type { Approval } from '../engine/types';
@@ -18,17 +18,17 @@ function ApprovalCard({ a, busy, run }: { a: Approval; busy: boolean; run: (f: (
   const [amt, setAmt] = useState(isRefund ? String(a.proposal.args.amount) : '');
   const edited = isRefund && Number(amt) !== Number(a.proposal.args.amount);
   return (
-    <div className="card approval">
+    <div className="card sm approval">
       <div className="card-head">
         <b>{a.proposal.tool}</b> · order {String(a.proposal.args.order_id)}
         {isRefund && <> · <b>{inr(Number(a.proposal.args.amount))}</b></>}
-        <Badge kind="escalate">needs approval</Badge>
+        <Badge kind="escalate">needs your decision</Badge>
       </div>
       <div className="muted small">Customer: {cust?.name} · {cust?.phone}</div>
-      <ul className="reasons">{a.outcome.reasons.map(r => <li key={r}><code>{r}</code> {REASON_LABEL[r]}</li>)}</ul>
-      <div className="muted small">{a.outcome.results.filter(r => r.ok).length}/{a.outcome.results.length} claims verified against the records ({a.outcome.tier}). Everything is valid; the amount or context needs a human.</div>
+      <ul className="reasons">{a.outcome.reasons.map(r => <li key={r}>{PLAIN[r] ?? r}</li>)}</ul>
+      <div className="muted small">{a.outcome.results.filter(r => r.ok).length} of {a.outcome.results.length} facts checked out in the records. Everything is valid; the amount or context needs a person.</div>
       {isRefund && (
-        <label className="edit">Edit amount (re-verified if changed): ₹
+        <label className="edit">Change the amount if you like (it is checked again): ₹
           <input type="number" value={amt} min={1} onChange={e => setAmt(e.target.value)} />
         </label>
       )}
@@ -42,7 +42,7 @@ function ApprovalCard({ a, busy, run }: { a: Approval; busy: boolean; run: (f: (
   );
 }
 
-function Approvals({ busy, run }: { busy: boolean; run: (f: () => Promise<void>) => void }) {
+export function Approvals({ busy, run, compact }: { busy: boolean; run: (f: () => Promise<void>) => void; compact?: boolean }) {
   const w = useWorld();
   const pending = w.approvals.filter(a => a.status === 'pending');
   const decided = w.approvals.filter(a => a.status !== 'pending').slice(-5).reverse();
@@ -50,32 +50,36 @@ function Approvals({ busy, run }: { busy: boolean; run: (f: () => Promise<void>)
   const overCap = w.precedents.filter(p => p.decision === 'approved' && p.action === 'issue_refund' && (p.amount ?? 0) > w.settings.autoLimit);
   const suggest = overCap.length >= 3 ? Math.ceil(Math.max(...overCap.map(p => p.amount ?? 0)) / 100) * 100 : null;
   return (
-    <div className="tab-body">
-      <h4>Approval queue {pending.length > 0 && <Badge kind="escalate">{pending.length}</Badge>}</h4>
-      {pending.length === 0 && <div className="muted small">Nothing waiting. Run “Over-limit refund” to see a request pause here.</div>}
+    <div className="tab-body seller">
+      <h4>{compact ? 'The seller’s phone' : 'Waiting for the seller'} {pending.length > 0 && <Badge kind="escalate">{pending.length}</Badge>}</h4>
+      {pending.length === 0 && <p className="seller-empty small">{compact ? 'No requests waiting. A request that needs the seller shows up here.' : 'Nothing is waiting. Run the “Over-limit refund” scenario to see a request pause here.'}</p>}
       {pending.map(a => <ApprovalCard key={a.id} a={a} busy={busy} run={run} />)}
-      {openTickets.length > 0 && <h4>Escalation tickets</h4>}
+      {openTickets.length > 0 && <h4>Handed over to you</h4>}
       {openTickets.map(t => (
-        <div key={t.id} className="card">
-          <div className="small">{t.summary}</div>
-          <button className="btn ghost" onClick={() => acknowledgeTicket(w, t.id)}>Acknowledge</button>
+        <div key={t.id} className="card sm flat">
+          <p className="small">{t.summary}</p>
+          <button className="btn sm" onClick={() => acknowledgeTicket(w, t.id)}>Mark as seen</button>
         </div>
       ))}
-      {decided.length > 0 && <h4>Recent decisions</h4>}
-      {decided.map(a => (
+      {!compact && decided.length > 0 && <h4>Recent decisions</h4>}
+      {!compact && decided.map(a => (
         <div key={a.id} className="decided">
-          <Badge kind={a.status === 'approved' ? 'allow' : 'block'}>{a.status}</Badge> {a.proposal.tool} · order {String(a.proposal.args.order_id)}{a.note ? ` (${a.note})` : ''}
+          <Badge kind={a.status === 'approved' ? 'allow' : 'block'}>{a.status}</Badge> {a.proposal.tool} on order {String(a.proposal.args.order_id)}{a.note ? ` (${a.note})` : ''}
         </div>
       ))}
-      <h4>Seller memory <span className="muted small">(precedents)</span></h4>
-      {w.precedents.length === 0 ? <div className="muted small">Your approve/reject decisions are stored here as precedents.</div>
-        : <div className="small">{w.precedents.length} decision(s) stored · {overCap.length} approved over the limit.</div>}
-      {suggest && (
-        <div className="card suggest">
-          You approved {overCap.length} over-limit refunds. Raise the auto-limit to {inr(suggest)}?
-          <div className="muted small">Suggestions never apply themselves; a human clicks. (The design uses 5 decisions; this demo uses 3 so you can see it.)</div>
-          <button className="btn approve" onClick={() => { w.settings.autoLimit = suggest; bump(w); }}>Raise to {inr(suggest)}</button>
-        </div>
+      {!compact && (
+        <>
+          <h4>What the agent has learned from you</h4>
+          {w.precedents.length === 0 ? <p className="small">Your approve and reject decisions are saved here as examples.</p>
+            : <p className="small">{w.precedents.length} decision(s) saved. {overCap.length} were refunds above the limit that you approved.</p>}
+          {suggest && (
+            <div className="card sm tone-yolk">
+              <p>You approved {overCap.length} refunds above the limit. Raise the auto-limit to {inr(suggest)}?</p>
+              <p className="small">A suggestion never applies itself. The full design waits for 5 decisions; this demo uses 3 so you can see it.</p>
+              <button className="btn sm mint" onClick={() => { w.settings.autoLimit = suggest; bump(w); }}>Raise to {inr(suggest)}</button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -203,12 +207,12 @@ export default function ConsolePane({ tab, setTab, busy, run }: { tab: Tab; setT
   const w = useWorld();
   const pending = w.approvals.filter(a => a.status === 'pending').length + w.tickets.filter(t => t.status === 'open').length;
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'approvals', label: `Approvals${pending ? ` (${pending})` : ''}` }, { id: 'log', label: 'Action log' },
-    { id: 'store', label: 'Store' }, { id: 'settings', label: 'Settings' }, { id: 'lab', label: 'Executor lab' },
+    { id: 'approvals', label: `Approvals${pending ? ` (${pending})` : ''}` }, { id: 'log', label: 'Log' },
+    { id: 'store', label: 'Store' }, { id: 'settings', label: 'Settings' }, { id: 'lab', label: 'Break it' },
   ];
   return (
-    <section className="pane console" aria-label="Seller console">
-      <div className="pane-head"><h2>Seller console</h2></div>
+    <section className="card console" aria-label="Seller console">
+      <h3 style={{ marginBottom: 12 }}>Seller console</h3>
       <div className="tabs" role="tablist">
         {tabs.map(t => <button key={t.id} role="tab" aria-selected={tab === t.id} className={`tab ${tab === t.id ? 'on' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>)}
       </div>
