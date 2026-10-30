@@ -4,7 +4,7 @@
 
 ## What the repository's tests do (and don't) show
 
-`npm test` runs 27 conformance tests against the demo engine. Each of the 17 demo scenarios must yield its designed verdict; bypass attempts must be refused; seller edits must be re-verified; the log chain must detect tampering. These tests check that **the implementation matches its design**. They are scripted, hand-written scenarios, so they are **not** an accuracy or robustness measurement and must not be quoted as one.
+`npm test` runs 32 conformance tests against the demo engine. Each of the 17 demo scenarios must yield its designed verdict; the six guided-tour messages must produce the outcomes the tour pages describe; bypass attempts must be refused; seller edits must be re-verified; the log chain must detect tampering. These tests check that **the implementation matches its design**. They are scripted, hand-written scenarios, so they are **not** an accuracy or robustness measurement and must not be quoted as one.
 
 ## The claim to test
 

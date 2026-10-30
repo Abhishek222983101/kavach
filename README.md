@@ -12,7 +12,9 @@ Kavach is a pre-action verification layer for tool-using support agents. The age
 
 No sign-in. Everything runs in your browser and resets when you reload.
 
-![An over-limit refund pauses for the seller, with every claim verified against the records](docs/img/over-limit-escalation.png)
+**New here? Start with the [2-minute guided tour](https://kavach-blush.vercel.app/#/tour/1).** Every page tells you what to do and what to look for.
+
+![Kavach home page: a refund slip with a made-up 30-day policy claim gets a BLOCKED stamp](docs/img/home.png)
 
 ---
 
@@ -74,12 +76,32 @@ Full details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Try the demo
 
-Open the [live demo](https://kavach-blush.vercel.app) and use the **Try a scenario** bar. The page has three panes: a simulated customer chat, the **thought process** (every step, with *Agent says* vs *Records say* for each claim), and a **seller console**.
+The site is built to be followed step by step, in plain language, with instructions on every page.
 
-Two switches in the header make the point:
+### 1. The guided tour (about two minutes)
+
+[Start the tour](https://kavach-blush.vercel.app/#/tour/1). Each page has a **Do this** box (your actions tick off as you go) and a **Look for** box, and the page colour matches the outcome.
+
+| Step | You do | You see |
+|---|---|---|
+| 1 | Send a small, clean refund request | Every fact is checked in the records, then the refund goes through on its own |
+| 2 | Send a big refund | It waits. You play the seller and press **Approve** (you can change the amount; it is re-checked) |
+| 3 | Send a refund that leans on a made-up "30-day policy" | The fabricated quote is not in the written policy, and the order is too old. **Blocked** |
+| 4 | Send a return request on an order whose note hides an instruction | The agent obeys the note and asks for ₹50,000 on a ₹600 order. **Blocked** |
+| 5 | Send the same kind of attack with Kavach **off** | The refund is paid out, which is the failure Kavach exists to prevent |
+| 6 | Try to break in | Five bypass attempts are refused. Editing a log row breaks its seal |
+
+Every result is told as a short story: *what the customer said → what the AI wants → Kavach checks every fact in the records → the decision (a stamp) → what happened*. **Show the technical steps** opens the full engine trace.
+
+![A fabricated policy quote and an out-of-window order are caught; the refund is blocked](docs/img/tour-blocked.png)
+
+### 2. The playground
+
+[Open the playground](https://kavach-blush.vercel.app/#/play) for 17 ready-made scenarios, or type your own message in English or Hinglish (an English translation is shown under each Hinglish message). Three switches make the point:
 
 - **Agent: Careful / Gullible.** *Gullible* simulates typical LLM mistakes: it believes the customer, obeys instructions hidden in a note, and skips its own checks. Watch the Verifier catch each one.
-- **Guard: ON / OFF.** *Off* is the no-Kavach baseline: the agent writes directly. Run the same attack both ways.
+- **Kavach on / OFF.** *Off* is the no-Kavach baseline: the agent writes directly. Run the same attack both ways.
+- **Changes allowed / paused.** The kill switch: the Executor refuses every change.
 
 | # | Scenario | Result |
 |---|---|---|
@@ -101,9 +123,7 @@ Two switches in the header make the point:
 | S16 | Missing order number | Asks instead of guessing |
 | S17 | S4's attack with the guard off | The bad refund goes through (baseline) |
 
-Also in the console: edit an approval amount (it is **re-verified**), toggle the kill switch, change the limits and window, run the **Executor lab** (five attempts to bypass the guard, all must be refused), and tamper with a log row to watch the hash chain break.
-
-![A fabricated policy quote is caught by the verbatim check](docs/img/hallucinated-policy-blocked.png)
+The seller console also lets you edit an approval amount (it is **re-verified**), change the limits and return window, view the mock store and the API calls made, run the **Break it** tests, and tamper with a log row to watch the hash chain break.
 
 ## What is real, and what is simulated
 
@@ -113,7 +133,7 @@ Also in the console: edit an approval amount (it is **re-verified**), toggle the
 - The risk router, seller approval with edit-and-re-verify, and the single repair attempt.
 - Verdict tokens signed with **HMAC-SHA-256** (WebCrypto), bound to `hash(tool, args)`; an Executor that refuses mismatched, forged, missing or expired tokens; idempotent writes.
 - A hash-chained, append-only action log with tamper detection.
-- 27 conformance tests (see [Evaluation](#evaluation)).
+- 32 conformance tests (see [Evaluation](#evaluation)).
 
 **Simulated, and labelled as such in the app**
 
@@ -132,7 +152,7 @@ git clone https://github.com/Abhishek222983101/kavach.git
 cd kavach
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 27 conformance tests
+npm test           # 32 conformance tests
 npm run build      # type-check + production build into dist/
 ```
 
@@ -151,11 +171,19 @@ src/
     pipeline.ts        agent (careful / gullible), orchestration, approvals, repair
     log.ts             hash-chained action log + tamper detection
     lab.ts             executor bypass tests
-    scenarios.ts       the 17 scenarios (shared by the UI and the tests)
-    engine.test.ts     conformance tests
-  components/          chat, thought-process, and seller-console UI
-docs/                  architecture, evaluation protocol, references
+    scenarios.ts       the 17 playground scenarios (shared by the UI and the tests)
+    engine.test.ts     conformance tests: scenarios, guarantees, executor lab, log
+    tour.test.ts       the six guided-tour messages produce the outcomes the pages promise
+  content/             tour steps, plain-language reason text, links
+  pages/               Home, Tour, Done, Play
+  components/          Story (plain-language result), Steps (technical trace), chat, seller console, nav
+  styles.css           the neo-brutalist design system
+docs/                  architecture, evaluation protocol, references, screenshots
 ```
+
+## Design
+
+The interface is deliberately plain and loud so a reviewer can follow it without instructions: black outlines, hard offset shadows, flat colour, square corners. **Colour carries meaning**: green means allowed, yellow means ask the seller, red means blocked, blue is information, purple is Kavach's own checking. Each tour step's page takes the colour of its outcome. The decision is shown as a stamp on the request. Type is Bricolage Grotesque (headlines), Atkinson Hyperlegible (body, chosen for legibility) and Space Mono (hashes and data only), all self-hosted through [Fontsource](https://fontsource.org) under the SIL Open Font License. The page is keyboard-navigable with visible focus, respects reduced-motion settings, and works down to phone width.
 
 ## Evaluation
 
