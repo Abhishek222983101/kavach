@@ -145,7 +145,7 @@ The [implemented-vs-designed table](docs/ARCHITECTURE.md#11-implemented-vs-desig
 
 ## Run it locally
 
-Requires Node 20+.
+Requires Node 22 (see `engines` in `package.json`).
 
 ```bash
 git clone https://github.com/Abhishek222983101/kavach.git

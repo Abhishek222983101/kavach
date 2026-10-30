@@ -19,7 +19,7 @@
   },
   "homepage": "https://github.com/Abhishek222983101/kavach#readme",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "type": "module",
   "scripts": {
